@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bills Board">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0e0e0e">
+<title>Monthly Bills Board</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0e0e0e;
+  --surface:#1a1a1a;
+  --surface-2:#222;
+  --surface-hover:#262626;
+  --line:#2a2a2a;
+  --line-strong:#3a3a3a;
+  --text:#f0f0f0;
+  --text-soft:#a8a8a8;
+  --text-mute:#6b6b6b;
+  --accent:#e8e8e8;
+  --paid:#7fb87f;
+  --archive:#5a5a5a;
+  --warn:#d4a55a;
+  --danger:#c46666;
+  --radius:10px;
+  --shadow:0 1px 3px rgba(0,0,0,.5);
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:var(--bg);color:var(--text);
+  min-height:100vh;padding:14px;line-height:1.45;font-size:14px;
+}
+#app{max-width:1400px;margin:0 auto}
+button{font-family:inherit;cursor:pointer;color:var(--text)}
+input,textarea{font-family:inherit;color:var(--text)}
+
+.header{
+  background:var(--surface);border-radius:var(--radius);
+  padding:14px 18px;margin-bottom:14px;
+  display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+  border:1px solid var(--line);
+}
+.title h1{font-size:18px;font-weight:600;letter-spacing:-.01em}
+.title p{font-size:12px;color:var(--text-mute);margin-top:2px}
+.month-nav{display:flex;align-items:center;gap:8px}
+.month-nav h2{font-size:16px;font-weight:600;min-width:130px;text-align:center;color:var(--accent)}
+.icon-btn{
+  width:32px;height:32px;border-radius:8px;border:1px solid var(--line-strong);
+  background:var(--surface-2);font-size:16px;
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:background .15s;
+}
+.icon-btn:hover{background:var(--surface-hover)}
+.actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.btn{
+  font-size:13px;font-weight:500;padding:7px 13px;border-radius:8px;
+  border:1px solid var(--line-strong);background:var(--surface-2);
+  transition:background .15s;
+}
+.btn:hover{background:var(--surface-hover)}
+.btn.primary{background:var(--accent);color:#111;border-color:var(--accent)}
+.btn.primary:hover{background:#fff}
+
+.save-dot{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:11px;color:var(--text-mute);
+  padding:4px 10px;border-radius:999px;background:var(--surface-2);
+  border:1px solid var(--line);
+}
+.save-dot .pip{width:6px;height:6px;border-radius:50%;background:var(--text-mute)}
+.save-dot[data-state="saving"] .pip{background:var(--warn);animation:pulse 1s infinite}
+.save-dot[data-state="saved"] .pip{background:var(--paid)}
+.save-dot[data-state="error"] .pip{background:var(--danger)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+.stats{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:8px;margin-bottom:14px;
+}
+.stat{
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius);padding:12px 14px;
+}
+.stat .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-mute);font-weight:600}
+.stat .val{font-size:20px;font-weight:700;margin-top:3px;color:var(--accent)}
+.stat .sub{font-size:11px;color:var(--text-mute);margin-top:1px}
+
+.board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media(max-width:900px){.board{grid-template-columns:1fr}}
+.lane{
+  background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius);padding:12px;min-height:280px;
+  display:flex;flex-direction:column;
+}
+.lane.over{border-color:var(--accent);background:var(--surface-2)}
+.lane-head{
+  display:flex;justify-content:space-between;align-items:baseline;
+  padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:10px;
+}
+.lane-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:7px}
+.lane-title .dot{width:8px;height:8px;border-radius:50%}
+.lane[data-status="toPay"] .dot{background:var(--accent)}
+.lane[data-status="paid"] .dot{background:var(--paid)}
+.lane[data-status="archive"] .dot{background:var(--archive)}
+.lane-title .count{color:var(--text-mute);font-weight:500;margin-left:2px;font-size:11px}
+.lane-total{font-size:12px;color:var(--text-soft);font-weight:600}
+.lane-body{flex:1;display:flex;flex-direction:column;gap:7px;min-height:60px}
+.empty{
+  text-align:center;padding:22px 10px;font-size:12px;color:var(--text-mute);
+  border:1.5px dashed var(--line-strong);border-radius:8px;
+}
+
+.card{
+  background:var(--surface-2);border:1px solid var(--line);
+  border-left:3px solid var(--accent);
+  border-radius:8px;padding:10px 12px;cursor:grab;
+  transition:background .12s;
+}
+.card:hover{background:var(--surface-hover)}
+.card.dragging{opacity:.4;cursor:grabbing}
+.card[data-status="paid"]{border-left-color:var(--paid)}
+.card[data-status="archive"]{border-left-color:var(--archive);opacity:.65}
+.card-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.card-name{font-weight:600;font-size:14px;flex:1;word-break:break-word}
+.card-amount{font-weight:700;font-size:14px;color:var(--accent);white-space:nowrap}
+.card-meta{display:flex;flex-wrap:wrap;gap:8px;font-size:11.5px;color:var(--text-mute);margin-top:3px}
+.card-debt{
+  margin-top:5px;font-size:11px;font-weight:600;display:inline-block;
+  color:var(--warn);background:rgba(212,165,90,.12);
+  padding:2px 8px;border-radius:999px;
+}
+.card-debt.zero{color:var(--paid);background:rgba(127,184,127,.12)}
+.card-notes{font-size:11.5px;color:var(--text-mute);margin-top:5px;font-style:italic}
+.card-actions{
+  display:flex;gap:4px;margin-top:8px;padding-top:7px;
+  border-top:1px dashed var(--line);flex-wrap:wrap;
+}
+.card-actions button{
+  font-size:11px;padding:3px 8px;border-radius:6px;
+  border:1px solid var(--line-strong);background:transparent;color:var(--text-soft);
+}
+.card-actions button:hover{background:var(--surface);color:var(--text)}
+.card-actions button.danger:hover{color:var(--danger);border-color:var(--danger)}
+.card-actions button.go:hover{color:var(--paid);border-color:var(--paid)}
+
+.backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.7);
+  display:none;align-items:center;justify-content:center;
+  padding:16px;z-index:100;
+}
+.backdrop.on{display:flex}
+.modal{
+  background:var(--surface);border:1px solid var(--line-strong);
+  border-radius:12px;padding:20px;width:100%;max-width:420px;
+  box-shadow:0 12px 40px rgba(0,0,0,.6);
+}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:14px}
+.modal form{display:flex;flex-direction:column;gap:10px}
+.fld{display:flex;flex-direction:column;gap:3px}
+.fld label{font-size:10.5px;font-weight:600;color:var(--text-mute);text-transform:uppercase;letter-spacing:.05em}
+.fld input,.fld textarea{
+  background:var(--surface-2);border:1px solid var(--line-strong);
+  padding:7px 10px;border-radius:7px;font-size:13.5px;
+}
+.fld input:focus,.fld textarea:focus{outline:none;border-color:var(--accent)}
+.fld-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.modal-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:6px;flex-wrap:wrap}
+.modal-actions .del{margin-right:auto;color:var(--danger);background:transparent;border:1px solid transparent}
+.modal-actions .del:hover{border-color:var(--danger);background:rgba(196,102,102,.08)}
+
+.toast{
+  position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+  background:var(--surface);color:var(--text);
+  padding:9px 16px;border-radius:8px;font-size:13px;font-weight:500;
+  border:1px solid var(--line-strong);box-shadow:var(--shadow);
+  opacity:0;pointer-events:none;transition:opacity .2s;z-index:200;
+}
+.toast.on{opacity:1}
+
+.banner{
+  background:rgba(212,165,90,.08);border:1px solid var(--warn);
+  color:var(--warn);padding:10px 14px;border-radius:8px;
+  font-size:12.5px;margin-bottom:12px;display:none;line-height:1.5;
+}
+.banner.on{display:block}
+
+/* ── iPad / Touch optimisations ───────────────────────────────── */
+
+/* Safe-area insets for notched iPads */
+body{
+  padding:env(safe-area-inset-top,14px) env(safe-area-inset-right,14px)
+         14px env(safe-area-inset-left,14px);
+}
+
+/* iPad portrait: 2-column board */
+@media(min-width:600px) and (max-width:1024px){
+  .board{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* Keep stats 2-up on narrow iPad portrait */
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+/* iPad landscape: 3-column (already default), but bigger touch targets */
+@media(min-width:1024px){
+  .board{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+
+/* Larger touch targets on touch devices */
+@media(hover:none){
+  .card-actions button{
+    padding:7px 12px;font-size:12.5px;
+  }
+  .icon-btn{width:40px;height:40px;font-size:18px}
+  .btn{padding:10px 16px;font-size:14px}
+  /* Prevent text selection during drag on touch */
+  .card{-webkit-user-select:none;user-select:none}
+  /* Bigger modal inputs for thumbs */
+  .fld input,.fld textarea{
+    padding:11px 12px;font-size:16px; /* 16px prevents iOS zoom */
+    -webkit-appearance:none;
+  }
+}
+
+/* Phone (≤599px): single column, compact header */
+@media(max-width:599px){
+  .header{flex-direction:column;align-items:stretch;gap:10px}
+  .month-nav{justify-content:center}
+  .actions{justify-content:space-between}
+  .board{grid-template-columns:1fr}
+  .stats{grid-template-columns:repeat(2,1fr)}
+}
+
+/* Smooth scroll on iOS */
+.lane-body{-webkit-overflow-scrolling:touch}
+
+/* Remove 300ms tap delay */
+a,button{touch-action:manipulation}
+
+/* Fix iOS momentum scroll on modal */
+.backdrop{-webkit-overflow-scrolling:touch;overflow-y:auto}
+
+/* Slightly larger modal on iPad so it doesn't feel cramped */
+@media(min-width:600px){
+  .modal{max-width:480px;padding:24px}
+  .modal h3{font-size:18px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="header">
+    <div class="title">
+      <h1>Monthly Bills Board</h1>
+      <p>Drag cards or tap actions</p>
+    </div>
+    <div class="month-nav">
+      <button class="icon-btn" id="prev">‹</button>
+      <h2 id="monthLabel">…</h2>
+      <button class="icon-btn" id="next">›</button>
+    </div>
+    <div class="actions">
+      <span class="save-dot" id="saveDot"><span class="pip"></span><span id="saveLabel">Ready</span></span>
+      <button class="btn primary" id="add">+ Add Bill</button>
+      <button class="btn" id="carry">Carry Forward →</button>
+      <button class="btn" id="syncBtn">⇅ Sync</button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner"></div>
+  <div class="stats" id="stats"></div>
+  <main class="board" id="board"></main>
+</div>
+
+<div class="backdrop" id="backdrop">
+  <div class="modal">
+    <h3 id="mTitle">Add Bill</h3>
+    <form id="form">
+      <div class="fld"><label>Name</label><input id="f_name" required maxlength="60"></div>
+      <div class="fld-row">
+        <div class="fld"><label>Amount $</label><input id="f_amount" type="number" step="0.01" min="0" required></div>
+        <div class="fld"><label>Due Day</label><input id="f_dueDay" maxlength="20" placeholder="15th, 1st Payday"></div>
+      </div>
+      <div class="fld-row">
+        <div class="fld"><label>Account</label><input id="f_account" maxlength="20" placeholder="x7646, Zelle"></div>
+        <div class="fld"><label>Debt Balance $</label><input id="f_debt" type="number" step="0.01" min="0" placeholder="0"></div>
+      </div>
+      <div class="fld"><label>Notes</label><textarea id="f_notes" rows="2" maxlength="200"></textarea></div>
+      <div class="modal-actions">
+        <button type="button" class="btn del" id="del" hidden>Delete</button>
+        <button type="button" class="btn" id="cancel">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Sync Modal -->
+<div class="backdrop" id="syncBackdrop">
+  <div class="modal" style="max-width:460px">
+    <h3>⇅ Sync Between Devices</h3>
+    <p style="font-size:12.5px;color:var(--text-mute);margin-bottom:16px;line-height:1.6">
+      Export saves all your months to a file. Import loads it on another device.
+      Do this whenever you switch devices to keep everything in sync.
+    </p>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn primary" id="exportBtn" style="text-align:center;padding:12px">
+        ⬇ Export — Download my data
+      </button>
+      <div style="position:relative;text-align:center;color:var(--text-mute);font-size:11px;padding:4px 0">
+        <span style="background:var(--surface);padding:0 10px;position:relative;z-index:1">or</span>
+        <div style="position:absolute;top:50%;left:0;right:0;height:1px;background:var(--line)"></div>
+      </div>
+      <label class="btn" style="text-align:center;padding:12px;cursor:pointer" id="importLabel">
+        ⬆ Import — Load from file
+        <input type="file" id="importFile" accept=".json" style="display:none">
+      </label>
+      <div id="importPreview" style="display:none;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:12px;font-size:12px;color:var(--text-soft);line-height:1.6"></div>
+      <button class="btn primary" id="importConfirm" style="display:none;text-align:center;padding:12px">
+        ✓ Confirm Import
+      </button>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px">
+      <button class="btn" id="syncCancel">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const SEED = [
+  ['Rent',              '1st',        1800,    'x7646', 0],
+  ['Chase Freedom (0%)','1st',        235.15,  'x7646', 8235.15],
+  ['PECO',              '2nd',        95.68,   'x7646', 0],
+  ['Affirm',            '3rd',        202.54,  'x7646', 606.80],
+  ['Amends',            '1st Payday', 100,     'Zelle', 0],
+  ['Chase',             '9th',        305.43,  'x7646', 0],
+  ['C&B (12M 0%)',      '15th',       260,     'x7646', 2136.12],
+  ['Signature Loan',    '15th',       500,     'x7646', 7869.98],
+  ['xFinity',           '19th',       129.20,  'x7646', 0],
+  ['AT&T',              '19th',       132.92,  'Zelle', 0],
+  ['Amends',            '2nd Payday', 100,     'Zelle', 0],
+  ["Renter's Ins.",     '20th',       13.74,   'x7646', 0],
+  ['Amex',              '22nd',       1100,    'x7646', 19609.20],
+  ['Cap One - PB',      '27th',       100,     'x7646', 624.27],
+  ['Chase - Amazon CC', '27th',       147.90,  'x7646', 647.90],
+  ['Affirm',            '27th',       62.19,   'x7646', 757.19],
+  ['Apple',             '30th',       100,     'x7646', 1410.64],
+  ['Car Ins.',          '31st',       287.49,  'x7646', 0],
+  ['Amends',            'Commission', 100,     'Zelle', 0],
+];
+
+const $ = s => document.querySelector(s);
+const fmt = n => '$' + (+n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const uid = () => 'c_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const seedCards = () => SEED.map(([name,dueDay,amount,account,debt]) => ({
+  id:uid(), name, dueDay, amount, account, debtBalance:debt, status:'toPay', notes:''
+}));
+
+const monthLabel = k => {
+  const [y,m] = k.split('-').map(Number);
+  return new Date(y,m-1,1).toLocaleString('en-US',{month:'long',year:'numeric'});
+};
+const shiftMonth = (k,d) => {
+  const [y,m] = k.split('-').map(Number);
+  const dt = new Date(y,m-1+d,1);
+  return dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
+};
+const dayOrder = s => {
+  if(!s) return 99;
+  const x = String(s).toLowerCase();
+  if(x.includes('1st payday')) return 14.5;
+  if(x.includes('2nd payday')) return 29.5;
+  if(x.includes('comission')||x.includes('commission')) return 32;
+  const m = x.match(/(\d+)/);
+  return m ? +m[1] : 99;
+};
+
+const state = { activeKey:'2026-05', months:{} };
+let editingId = null;
+let saveTimer = null;
+let storageOK = true;
+
+async function storeGet(key){
+  try {
+    const raw = localStorage.getItem('bills:' + key);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+async function storeSet(key, val){
+  try {
+    localStorage.setItem('bills:' + key, JSON.stringify(val));
+    return true;
+  } catch {
+    storageOK = false;
+    return false;
+  }
+}
+
+function setSave(s, label){
+  $('#saveDot').dataset.state = s;
+  $('#saveLabel').textContent = label;
+}
+
+function queueSave(){
+  setSave('saving', 'Saving…');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    const key = state.activeKey;
+    const ok1 = await storeSet('month:'+key, state.months[key]);
+    const ok2 = await storeSet('meta', { activeKey: state.activeKey });
+    if(ok1 && ok2){
+      setSave('saved', 'Saved');
+    } else {
+      setSave('error', 'Local only');
+      showBanner();
+    }
+  }, 350);
+}
+
+function showBanner(){
+  const b = $('#banner');
+  if(b.classList.contains('on')) return;
+  b.textContent = "Storage quota exceeded or unavailable — changes may not be saved. Try clearing old data in your browser settings.";
+  b.classList.add('on');
+}
+
+async function ensureMonth(key){
+  if(state.months[key]) return;
+  const fromStore = await storeGet('month:'+key);
+  if(fromStore && fromStore.cards){
+    state.months[key] = fromStore;
+  } else if(key === '2026-05'){
+    state.months[key] = { cards: seedCards() };
+  } else {
+    state.months[key] = { cards: [] };
+  }
+}
+
+function render(){
+  $('#monthLabel').textContent = monthLabel(state.activeKey);
+  const cards = (state.months[state.activeKey]?.cards || []).slice()
+    .sort((a,b) => dayOrder(a.dueDay) - dayOrder(b.dueDay));
+
+  const t = {toPay:0,paid:0,archive:0}, c = {toPay:0,paid:0,archive:0};
+  let debt = 0;
+  for(const card of cards){
+    t[card.status] += +card.amount||0;
+    c[card.status]++;
+    debt += +card.debtBalance||0;
+  }
+  $('#stats').innerHTML = `
+    <div class="stat"><div class="lbl">Month Total</div><div class="val">${fmt(t.toPay+t.paid)}</div><div class="sub">${c.toPay+c.paid} active bills</div></div>
+    <div class="stat"><div class="lbl">Still To Pay</div><div class="val">${fmt(t.toPay)}</div><div class="sub">${c.toPay} pending</div></div>
+    <div class="stat"><div class="lbl">Paid</div><div class="val">${fmt(t.paid)}</div><div class="sub">${c.paid} done</div></div>
+    <div class="stat"><div class="lbl">Open Debt</div><div class="val">${fmt(debt)}</div><div class="sub">across accounts</div></div>
+  `;
+
+  const lanes = [
+    {s:'toPay',   t:'To Pay',  e:'Add a bill or drag one here'},
+    {s:'paid',    t:'Paid',    e:'Cards land here as you pay them'},
+    {s:'archive', t:'Archive', e:'Paid-off debts and removed bills'},
+  ];
+  $('#board').innerHTML = lanes.map(L => {
+    const items = cards.filter(x => x.status === L.s);
+    const total = items.reduce((s,x) => s + (+x.amount||0), 0);
+    return `
+      <section class="lane" data-status="${L.s}">
+        <div class="lane-head">
+          <div class="lane-title"><span class="dot"></span>${L.t}<span class="count">${items.length}</span></div>
+          <div class="lane-total">${fmt(total)}</div>
+        </div>
+        <div class="lane-body" data-drop="${L.s}">
+          ${items.length ? items.map(renderCard).join('') : `<div class="empty">${L.e}</div>`}
+        </div>
+      </section>`;
+  }).join('');
+  wireCards();
+  wireLanes();
+}
+
+function renderCard(c){
+  const debt = +c.debtBalance || 0;
+  const pill = debt > 0
+    ? `<div class="card-debt">Balance: ${fmt(debt)}</div>`
+    : (c._hadDebt ? `<div class="card-debt zero">✓ Paid off</div>` : '');
+  const notes = c.notes ? `<div class="card-notes">${esc(c.notes)}</div>` : '';
+  const day = c.dueDay ? `<span>📅 ${esc(c.dueDay)}</span>` : '';
+  const acct = c.account ? `<span>💳 ${esc(c.account)}</span>` : '';
+  let acts = '';
+  if(c.status === 'toPay')      acts = `<button data-act="paid" class="go">✓ Paid</button><button data-act="archive">Archive</button>`;
+  else if(c.status === 'paid')  acts = `<button data-act="toPay">↩ Unpay</button><button data-act="archive">Archive</button>`;
+  else                          acts = `<button data-act="toPay">↺ Restore</button>`;
+  return `
+    <div class="card" draggable="true" data-id="${c.id}" data-status="${c.status}">
+      <div class="card-top"><div class="card-name">${esc(c.name)}</div><div class="card-amount">${fmt(c.amount)}</div></div>
+      <div class="card-meta">${day}${acct}</div>
+      ${pill}${notes}
+      <div class="card-actions">
+        <button data-act="edit">✎ Edit</button>${acts}<button data-act="del" class="danger">🗑</button>
+      </div>
+    </div>`;
+}
+
+function wireCards(){
+  document.querySelectorAll('.card').forEach(el => {
+    const id = el.dataset.id;
+    el.addEventListener('dragstart', e => {
+      el.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', id);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    el.addEventListener('dragend', () => el.classList.remove('dragging'));
+    el.querySelectorAll('.card-actions button').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const act = btn.dataset.act;
+        const card = findCard(id);
+        if(!card) return;
+        if(act === 'edit') openEdit(card);
+        else if(act === 'del'){
+          if(confirm(`Delete "${card.name}"?`)) deleteCard(id);
+        } else moveCard(id, act);
+      });
+    });
+  });
+}
+
+function wireLanes(){
+  document.querySelectorAll('.lane-body').forEach(body => {
+    const lane = body.closest('.lane');
+    body.addEventListener('dragover', e => {
+      e.preventDefault();
+      lane.classList.add('over');
+    });
+    body.addEventListener('dragleave', e => {
+      if(!lane.contains(e.relatedTarget)) lane.classList.remove('over');
+    });
+    body.addEventListener('drop', e => {
+      e.preventDefault();
+      lane.classList.remove('over');
+      const id = e.dataTransfer.getData('text/plain');
+      if(id) moveCard(id, body.dataset.drop);
+    });
+  });
+}
+
+function findCard(id){
+  return state.months[state.activeKey]?.cards.find(c => c.id === id);
+}
+
+function moveCard(id, newStatus){
+  const card = findCard(id);
+  if(!card || card.status === newStatus) return;
+  card.status = newStatus;
+  queueSave();
+  render();
+}
+
+function deleteCard(id){
+  const m = state.months[state.activeKey];
+  m.cards = m.cards.filter(c => c.id !== id);
+  queueSave();
+  render();
+}
+
+function openAdd(){
+  editingId = null;
+  $('#mTitle').textContent = 'Add Bill';
+  $('#del').hidden = true;
+  $('#form').reset();
+  $('#backdrop').classList.add('on');
+  setTimeout(()=>$('#f_name').focus(),50);
+}
+function openEdit(c){
+  editingId = c.id;
+  $('#mTitle').textContent = 'Edit Bill';
+  $('#del').hidden = false;
+  $('#f_name').value = c.name || '';
+  $('#f_amount').value = c.amount ?? '';
+  $('#f_dueDay').value = c.dueDay || '';
+  $('#f_account').value = c.account || '';
+  $('#f_debt').value = c.debtBalance ?? '';
+  $('#f_notes').value = c.notes || '';
+  $('#backdrop').classList.add('on');
+  setTimeout(()=>$('#f_name').focus(),50);
+}
+function closeModal(){ $('#backdrop').classList.remove('on'); editingId = null; }
+
+$('#cancel').onclick = closeModal;
+$('#backdrop').onclick = e => { if(e.target === $('#backdrop')) closeModal(); };
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeModal(); });
+
+$('#form').addEventListener('submit', e => {
+  e.preventDefault();
+  const data = {
+    name:        $('#f_name').value.trim(),
+    amount:      parseFloat($('#f_amount').value) || 0,
+    dueDay:      $('#f_dueDay').value.trim(),
+    account:     $('#f_account').value.trim(),
+    debtBalance: parseFloat($('#f_debt').value) || 0,
+    notes:       $('#f_notes').value.trim(),
+  };
+  if(!data.name) return;
+  const m = state.months[state.activeKey];
+  if(editingId){
+    const c = findCard(editingId);
+    if(c){
+      const had = (+c.debtBalance||0) > 0;
+      Object.assign(c, data);
+      if(had && data.debtBalance === 0) c._hadDebt = true;
+    }
+  } else {
+    m.cards.push({ ...data, id:uid(), status:'toPay' });
+  }
+  queueSave();
+  closeModal();
+  render();
+});
+
+$('#del').onclick = () => {
+  if(!editingId) return;
+  const c = findCard(editingId);
+  if(c && confirm(`Delete "${c.name}"?`)){
+    deleteCard(editingId);
+    closeModal();
+  }
+};
+
+$('#add').onclick = openAdd;
+
+$('#prev').onclick = async () => {
+  state.activeKey = shiftMonth(state.activeKey, -1);
+  await ensureMonth(state.activeKey);
+  queueSave();
+  render();
+};
+$('#next').onclick = async () => {
+  state.activeKey = shiftMonth(state.activeKey, 1);
+  await ensureMonth(state.activeKey);
+  queueSave();
+  render();
+};
+
+$('#carry').onclick = async () => {
+  const cur = state.months[state.activeKey];
+  if(!cur || !cur.cards.length){ toast('Nothing to carry'); return; }
+  const nextKey = shiftMonth(state.activeKey, 1);
+  await ensureMonth(nextKey);
+  const nxt = state.months[nextKey];
+  if(nxt.cards.length && !confirm(`${monthLabel(nextKey)} already has ${nxt.cards.length} bills. Add to it?`)) return;
+
+  const carried = cur.cards.filter(c => c.status !== 'archive').map(c => {
+    const debt = +c.debtBalance || 0;
+    const amt = +c.amount || 0;
+    const newDebt = (debt > 0 && c.status === 'paid') ? Math.max(0, debt - amt) : debt;
+    return { ...c, id:uid(), status:'toPay', debtBalance:newDebt };
+  });
+  nxt.cards = nxt.cards.concat(carried);
+  state.activeKey = nextKey;
+  queueSave();
+  render();
+  toast(`Carried ${carried.length} bills to ${monthLabel(nextKey)}`);
+};
+
+function toast(msg){
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('on'), 2000);
+}
+
+(async () => {
+  const meta = await storeGet('meta');
+  if(meta?.activeKey) state.activeKey = meta.activeKey;
+  await ensureMonth(state.activeKey);
+  render();
+  // Initial save attempt — confirms storage works and persists the seed
+  setSave('saving', 'Saving…');
+  const ok1 = await storeSet('month:'+state.activeKey, state.months[state.activeKey]);
+  const ok2 = await storeSet('meta', { activeKey: state.activeKey });
+  if(ok1 && ok2){
+    setSave('saved', 'Saved');
+  } else {
+    setSave('error', 'Local only');
+    showBanner();
+  }
+})();
+// ── Sync: Export / Import ────────────────────────────────────────
+$('#syncBtn').onclick = () => {
+  $('#importPreview').style.display = 'none';
+  $('#importConfirm').style.display = 'none';
+  $('#importFile').value = '';
+  $('#syncBackdrop').classList.add('on');
+};
+$('#syncCancel').onclick = () => $('#syncBackdrop').classList.remove('on');
+$('#syncBackdrop').onclick = e => { if(e.target === $('#syncBackdrop')) $('#syncBackdrop').classList.remove('on'); };
+
+$('#exportBtn').onclick = () => {
+  // Gather everything from localStorage
+  const dump = { exportedAt: new Date().toISOString(), data: {} };
+  for(let i = 0; i < localStorage.length; i++){
+    const k = localStorage.key(i);
+    if(k && k.startsWith('bills:')){
+      try { dump.data[k.slice(6)] = JSON.parse(localStorage.getItem(k)); } catch{}
+    }
+  }
+  const blob = new Blob([JSON.stringify(dump, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `bills-backup-${d}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Data exported ✓');
+};
+
+let pendingImport = null;
+$('#importFile').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const dump = JSON.parse(ev.target.result);
+      if(!dump.data) throw new Error('Invalid format');
+      const keys = Object.keys(dump.data);
+      const months = keys.filter(k => k.startsWith('month:')).length;
+      const exported = dump.exportedAt ? new Date(dump.exportedAt).toLocaleString() : 'unknown';
+      pendingImport = dump;
+      const preview = $('#importPreview');
+      preview.innerHTML = `
+        <strong style="color:var(--text)">File looks good ✓</strong><br>
+        ${months} month(s) of data<br>
+        Exported: ${exported}<br>
+        <span style="color:var(--warn)">⚠ This will overwrite your current data on this device.</span>
+      `;
+      preview.style.display = 'block';
+      $('#importConfirm').style.display = 'block';
+    } catch {
+      pendingImport = null;
+      const preview = $('#importPreview');
+      preview.innerHTML = '<span style="color:var(--danger)">✗ Could not read file — make sure it\'s a Bills Board export.</span>';
+      preview.style.display = 'block';
+      $('#importConfirm').style.display = 'none';
+    }
+  };
+  reader.readAsText(file);
+});
+
+$('#importConfirm').onclick = async () => {
+  if(!pendingImport) return;
+  // Clear old bills data
+  const toRemove = [];
+  for(let i = 0; i < localStorage.length; i++){
+    const k = localStorage.key(i);
+    if(k && k.startsWith('bills:')) toRemove.push(k);
+  }
+  toRemove.forEach(k => localStorage.removeItem(k));
+  // Write imported data
+  for(const [k, v] of Object.entries(pendingImport.data)){
+    localStorage.setItem('bills:' + k, JSON.stringify(v));
+  }
+  // Reload state
+  const meta = await storeGet('meta');
+  if(meta?.activeKey) state.activeKey = meta.activeKey;
+  state.months = {};
+  await ensureMonth(state.activeKey);
+  render();
+  $('#syncBackdrop').classList.remove('on');
+  pendingImport = null;
+  toast('Import successful ✓');
+};
+
+// ── Touch drag-and-drop (iOS Safari doesn't support HTML5 drag) ──
+(function(){
+  let dragging = null, ghost = null, startX = 0, startY = 0, moved = false;
+
+  function cardFromTouch(t){
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    return el ? el.closest('.card') : null;
+  }
+  function dropZoneFromPoint(x, y){
+    const els = document.elementsFromPoint(x, y);
+    for(const el of els){
+      if(el.dataset && el.dataset.drop) return el.dataset.drop;
+    }
+    return null;
+  }
+
+  function createGhost(card){
+    const r = card.getBoundingClientRect();
+    ghost = card.cloneNode(true);
+    ghost.style.cssText = `
+      position:fixed;left:${r.left}px;top:${r.top}px;
+      width:${r.width}px;opacity:.75;pointer-events:none;
+      z-index:999;border-radius:8px;transform:rotate(1.5deg) scale(1.02);
+      transition:none;box-shadow:0 8px 24px rgba(0,0,0,.5);
+    `;
+    document.body.appendChild(ghost);
+  }
+
+  document.addEventListener('touchstart', e => {
+    const card = e.target.closest('.card');
+    if(!card) return;
+    // Don't hijack button taps
+    if(e.target.closest('button')) return;
+    const t = e.touches[0];
+    startX = t.clientX; startY = t.clientY; moved = false;
+    // Long-press to start drag
+    dragging = null;
+    card._dragTimer = setTimeout(() => {
+      dragging = card;
+      createGhost(card);
+      card.style.opacity = '.3';
+      // Light haptic if available
+      if(navigator.vibrate) navigator.vibrate(30);
+    }, 250);
+  }, {passive:true});
+
+  document.addEventListener('touchmove', e => {
+    if(card => card && card._dragTimer){
+      document.querySelectorAll('.card').forEach(c => {
+        if(Math.abs(e.touches[0].clientX - startX) > 8 ||
+           Math.abs(e.touches[0].clientY - startY) > 8){
+          clearTimeout(c._dragTimer);
+        }
+      });
+    }
+    if(!dragging) return;
+    moved = true;
+    e.preventDefault();
+    const t = e.touches[0];
+    const r = dragging.getBoundingClientRect();
+    ghost.style.left = (t.clientX - r.width/2) + 'px';
+    ghost.style.top  = (t.clientY - r.height/2) + 'px';
+    // Highlight hovered lane
+    document.querySelectorAll('.lane').forEach(l => l.classList.remove('over'));
+    const zone = dropZoneFromPoint(t.clientX, t.clientY);
+    if(zone){
+      const lane = document.querySelector(`.lane[data-status="${zone}"]`);
+      if(lane) lane.classList.add('over');
+    }
+  }, {passive:false});
+
+  document.addEventListener('touchend', e => {
+    document.querySelectorAll('.card').forEach(c => clearTimeout(c._dragTimer));
+    if(!dragging){ return; }
+    const t = e.changedTouches[0];
+    const zone = dropZoneFromPoint(t.clientX, t.clientY);
+    document.querySelectorAll('.lane').forEach(l => l.classList.remove('over'));
+    if(ghost){ ghost.remove(); ghost = null; }
+    dragging.style.opacity = '';
+    if(zone && moved) moveCard(dragging.dataset.id, zone);
+    dragging = null; moved = false;
+  });
+})();
+</script>
+</html>
